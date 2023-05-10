@@ -1,5 +1,5 @@
 # Processed fields
-./Notebooks/j[0-9]*
+./Notebooks/j*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
