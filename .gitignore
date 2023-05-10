@@ -1,6 +1,8 @@
 # Processed fields
-Notebooks/j*
+Astrometry/j*
 Mosaics/panoramic-j*
+Mosaics/index*
+Mosaics/mosaics.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
