@@ -4,6 +4,8 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
 
 *Run notebooks locally or on a GitHub codespace!*
 
+[GO 2514 visit status report](https://www.stsci.edu/cgi-bin/get-proposal-info?id=2514&observatory=JWST)
+
 # Basic workflow
 
 - `Notebooks/JWST-associations.ipynb`
