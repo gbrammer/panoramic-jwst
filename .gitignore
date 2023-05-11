@@ -4,6 +4,10 @@ Mosaics/panoramic-j*
 Mosaics/index*
 Mosaics/mosaics.html
 
+FRESCO/fresco*
+FRESCO/jw01895*
+FRESCO/GRIZLI/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
