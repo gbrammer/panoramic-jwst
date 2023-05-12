@@ -1,3 +1,6 @@
+![Alt text](./PanoramicLogo.png?raw=true "PanoramicLogo")
+
+
 # panoramic-jwst
 
 Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
