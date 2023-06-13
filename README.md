@@ -9,6 +9,8 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
 
 [GO 2514 visit status report](https://www.stsci.edu/cgi-bin/get-proposal-info?id=2514&observatory=JWST)
 
+*NB: If you're not part of the collaboration, the steps below that require write access to the grizli database won't work.  However, the general processing scripts should work on a standalone machine with a standard grizli installation, e.g., `pip install grizli[aws,jwst]`.*
+
 # Basic workflow
 
 1. `Notebooks/JWST-associations.ipynb`
