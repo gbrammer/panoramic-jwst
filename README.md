@@ -47,6 +47,12 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
 4. `Notebooks/panoramic-mosaics.ipynb`
   - Make 20/40 mas SW/LW mosaics of each PANORAMIC field
   - Send results to AWS/S3
+  - Update cutout thumbnails sent to AWS/Lambda
+  - Add to `combined_tiles` table for mosaic tiles and FITSMap
+5. `Notebooks/make-map-tiles.ipynb`
+  - Drizzle mosaic tiles on EC2
+  - Make RGB tiles
+  - Make FITSMap viewer, e.g., [panoramic-j131432p2432](https://s3.amazonaws.com/grizli-v2/ClusterTiles/Map/panoramic-j131432p2432/index.html?coord=198.6426378,24.5453941&zoom=5)
   
 ## Mosaic products
 
