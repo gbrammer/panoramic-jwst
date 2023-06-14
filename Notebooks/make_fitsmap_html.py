@@ -44,7 +44,7 @@ def run_make_fitsmap_html(field, viz_catalogs=viz_catalogs):
     make_tile_overlay(field)
 
     if viz_catalogs is not None:
-        make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10)
+        make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=True)
 
 
 def make_html_file(field, crval1, crval2, f_tiles):
@@ -497,7 +497,8 @@ def make_tile_overlay(field):
         
     os.system(f'aws s3 cp {field}_tiles.js s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
 
-def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10):
+
+def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=True):
     """
     Make a JavaScript overlay with some Vizier catalog queries
     """
@@ -530,7 +531,7 @@ def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10):
             continue
             
         if (vname == 'DESI-S (Duncan+22)') & ('DESI-N (Duncan+22)' in has_catalog):
-            print('Skip ', vname)
+            print('    - Skip ', vname)
             continue
 
         v, vcolor = viz_catalogs[vname]
@@ -552,10 +553,11 @@ def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10):
                                         rd_colnames = ['RAJ2000', 'DEJ2000'],
                                         db=f'"{v}"', verbose=False)
             except:
-                print(f"Query {vname}: {v} failed")
+                print(f"    * Query {vname}: {v} failed")
                 continue
             
-        print(vname, v, len(vcat))
+        print('    ', vname, v, len(vcat))
+
         if len(vcat) == 0:
             continue
         
@@ -646,7 +648,94 @@ def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10):
 
             fp.write(f"""overlays['{vname}'] = L.layerGroup({key});""")
         
-        os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+        os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read --quiet')
 
-    print(f"https://s3.amazonaws.com/{S3_MAP_PREFIX}/{field}/index.html")
+    if with_desi:
+        _ = make_desi_edr_layer(field)
+
+    print(f"     https://s3.amazonaws.com/{S3_MAP_PREFIX}/{field}/index.html")
+
+
+def make_desi_edr_layer(field):
+    """
+    """
+    import grizli.catalog
+
+    output_file = f'{field}_vizier.js'
+
+    wcs = get_tile_wcs(field, ref='09.09')
+    r0, d0 = wcs.calc_footprint().mean(axis=0)
+    ra_ref, dec_ref = r0, d0
+
+    # DESI
+    edr = grizli.catalog.query_tap_catalog(ra=ra_ref, dec=dec_ref, radius=30,
+                                       tap_url='https://datalab.noirlab.edu/tap',
+                                       db='desi_edr.zpix',
+                                       rd_colnames=['mean_fiber_ra', 'mean_fiber_dec'],
+                                       verbose=False,
+                                )
+    
+    if len(edr) == 0:
+        return False
+    
+    else:
+        print(f'     DESI EDR: {len(edr)} sources')
+
+    key = 'desi_edr'
+    
+    edr['comment'] = ['targetid={targetid} <br> {spectype} z={z:.4f} &plusmn; {zerr:.4f}'.format(**row) for row in edr]
+    edr['popup'] = ['{comment} <br> <a href="https://www.legacysurvey.org/viewer/desi-spectrum/edr/targetid{targetid}"/> Spectrum </a>'.format(**row)
+                     for row in edr]
+    
+    sizes = None
+
+    with open(output_file,'a') as fp:
+        fp.write(f'var {key} = [];\n')
+
+        olay = []
+        si = 0.5/0.1 # R=0.5"
+        
+        for i in range(len(edr)):
+            # , (ri, di, comment) in enumerate(zip(vcat['ra'], vcat['dec'], vcat['comment'])):
+            ri = edr['ra'][i]
+            di = edr['dec'][i]
+            comment = edr['comment'][i]
+            popup = edr['popup'][i]
+
+            if sizes is None:
+                si = 0.5/0.1
+            else:
+                si = sizes[i]/0.1
+
+            sr = utils.SRegion(f'CIRCLE({ri},{di},{si}")', wrap=False, ncircle=16)
+            xy = wcs.all_world2pix(*sr.xy[0].T, 0)
+            xyl = np.array(xy[::-1]).T.tolist()
+            xyls = ','.join([f'[{r[0]:.1f},{r[1]:.1f}]' for r in xyl])
+
+            xpi, ypi = wcs.all_world2pix([ri], [di], 0)
+
+            # olay.append(f'[{xyls}]')
+
+            if edr['spectype'][i] == 'STAR':
+                col = 'lightblue'
+            elif edr['spectype'][i] == 'GALAXY':
+                col = 'yellow'
+            elif edr['spectype'][i].upper() in ['QSO','QUASAR']:
+                col = 'magenta'
+            else:
+                col = 'white'
+
+            if sizes is None:
+                marker = f"""L.circleMarker([{ypi[0]:.1f},{xpi[0]:.1f}], {{radius:8,color:'{col}',weight:2,opacity:0.8,fill:false}}).bindTooltip('{comment}', {{direction:'auto'}})"""
+            else:
+                marker = f"""L.polygon([ {xyls} ], {{color: '{col}', weight:2, opacity:0.8, fill:false}}).bindTooltip('{comment}', {{ direction: 'auto'}})"""
+            
+            marker += f""".bindPopup('{popup}', {{ direction: 'auto'}})"""
+
+            fp.write(f"""{key}.push({marker});\n""")
+
+        fp.write(f"""overlays['DESI EDR'] = L.layerGroup({key});""")
+    
+    os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read --quiet')
+    
 
