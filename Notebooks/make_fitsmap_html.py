@@ -579,7 +579,7 @@ def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10):
         elif 'Lyke' in vname:
             # quasars
             vcat['comment'] = ['SDSS = {SDSS} &nbsp;&nbsp; z = {z:.3f}'.format(vname=vname, **row) for row in vcat]
-            popups = ['SDSS = {SDSS} &nbsp;&nbsp; z = {z:.3f} <br> <a href="http://dr16.sdss.org/optical/spectrum/view?plateid={Plate}&mjd={MJD}&fiberid={Fiber}" /> Spectrum </a>'.format(vname=vname, **row)
+            popups = ['SDSS = {SDSS} &nbsp;&nbsp; z = {z:.3f} &nbsp;&nbsp; <a href="http://dr16.sdss.org/optical/spectrum/view?plateid={Plate}&mjd={MJD}&fiberid={Fiber}" /> Spectrum </a>'.format(vname=vname, **row)
                       for row in vcat]
 
         elif '2CXO' in vcat.colnames:
