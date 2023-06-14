@@ -608,7 +608,7 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
             for c in ['ePos','srcML']:
                 if c in vcat.colnames:
                     sizes = vcat[c]
-                    print(f'Use {c} for source sizes')
+                    print(f'       - Use {c} for source sizes')
                     break
 
         #col = cm(np.clip((vcat['SNR']-5)/8, 0,1)*0.7+0.2)
