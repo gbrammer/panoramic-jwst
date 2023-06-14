@@ -423,7 +423,7 @@ def get_tile_wcs(field, ref='09.09'):
     import astropy.io.fits as pyfits
     import astropy.wcs as pywcs
 
-    ref_tile = db.SQL(f"""select * from combined_tiles where field = '{field}' AND tile = '09.09'""")
+    ref_tile = db.SQL(f"""select * from combined_tiles where field = '{field}' AND tile = '{ref}'""")
 
     h = pyfits.Header()
     for k in ref_tile.colnames:
@@ -498,7 +498,7 @@ def make_tile_overlay(field):
     os.system(f'aws s3 cp {field}_tiles.js s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
 
 
-def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=True):
+def make_vizier_overlay(field, viz_catalogs=viz_catalogs, ref_tile='09.09', radius=10, with_desi=True):
     """
     Make a JavaScript overlay with some Vizier catalog queries
     """
@@ -519,7 +519,7 @@ def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=T
 
     has_catalog = []
 
-    wcs = get_tile_wcs(field, ref='09.09')
+    wcs = get_tile_wcs(field, ref=ref_tile)
 
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
@@ -651,19 +651,19 @@ def make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=T
         os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read --quiet')
 
     if with_desi:
-        _ = make_desi_edr_layer(field)
+        _ = make_desi_edr_layer(field, ref_tile=ref_tile)
 
     print(f"     https://s3.amazonaws.com/{S3_MAP_PREFIX}/{field}/index.html")
 
 
-def make_desi_edr_layer(field):
+def make_desi_edr_layer(field, ref_tile='09.09'):
     """
     """
     import grizli.catalog
 
     output_file = f'{field}_vizier.js'
 
-    wcs = get_tile_wcs(field, ref='09.09')
+    wcs = get_tile_wcs(field, ref=ref_tile)
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
 
