@@ -10,7 +10,7 @@ from grizli import utils
 S3_MAP_PREFIX = 'grizli-v2/ClusterTiles/Map'
 
 # Vizier catalogs
-viz_catalogs = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
+VIZ_CATALOGS = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
                 'DESI-S (Duncan+22)':('VII/292/south','olive'),
                 'GAIA DR3': ('I/355/gaiadr3', 'lightblue'),
                 'XMM-DR11 (Traulson+22)': ('IX/66/xmm411st', 'pink'),
@@ -20,8 +20,9 @@ viz_catalogs = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
                }
 
 
-def run_make_fitsmap_html(field, viz_catalogs=viz_catalogs):
+def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS):
     """
+    Run all steps to make the FITSMap HTML file and the catalog overlays
     """
 
     print(f'## {field}')
@@ -49,8 +50,9 @@ def run_make_fitsmap_html(field, viz_catalogs=viz_catalogs):
 
 def make_html_file(field, crval1, crval2, f_tiles):
     """
+    Make FITSMap HTML file for a given field
     """
-    
+
     html_file = f'{field}_map.html'
 
     HEAD = """<!DOCTYPE html>
@@ -498,7 +500,7 @@ def make_tile_overlay(field):
     os.system(f'aws s3 cp {field}_tiles.js s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
 
 
-def make_vizier_overlay(field, viz_catalogs=viz_catalogs, ref_tile='09.09', radius=10, with_desi=True):
+def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radius=10, with_desi=True):
     """
     Make a JavaScript overlay with some Vizier catalog queries
     """
