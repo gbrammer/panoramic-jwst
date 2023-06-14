@@ -3,6 +3,8 @@ Astrometry/j*
 Mosaics/panoramic-j*
 Mosaics/index*
 Mosaics/mosaics.html
+Mosaics/error_*
+Mosaics/sync_*
 
 LocalWorkspace/*
 
