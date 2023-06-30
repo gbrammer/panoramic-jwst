@@ -53,6 +53,8 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
   - Drizzle mosaic tiles on EC2
   - Make RGB tiles
   - Make FITSMap viewer, e.g., [panoramic-j131432p2432](https://s3.amazonaws.com/grizli-v2/ClusterTiles/Map/panoramic-j131432p2432/index.html?coord=198.6426378,24.5453941&zoom=5)
+  - **In detail**:
+    1. Make sure to flip from 0 to 1 at Change combined_tiles status = 3 to 0 and launch EC2 with run_all_tiles
   
 ## Mosaic products
 
