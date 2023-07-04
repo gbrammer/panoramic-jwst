@@ -28,6 +28,7 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
   - Generate an astrometric catalog and send to the ``astrometry_reference`` table in the database.
   - The first time an association is run that doesn't overlap with any astrometric reference, the pipeline will try to pull astrometric reference files from some large ground-based database, e.g., PanSTARRS or NOAO LegacySurveys.  These alone seem to be reasonably well aligned to GAIA, but even their source density is fairly low within the JWST instrumental FOV.  So the procedure is to first align some LW filter to the external reference (LW because of high sensitivity and larger FOV).  Then make a catalog from that and send the sources to the `astrometry_reference` table in the databse, which will then be queried automatic when the other filters that overlap with that FoV are run.
   - **In detail**:
+  - Useful to first check the setting for output scrolling and wordwrap to avoid issues with codespace display
     1. `Run All` in `Notebooks/make-astrometry-catalog.ipynb`.  This will find PANORAMIC associations that haven't yet been processed and will run the F444W associations for them and generate the catalogs.
     2. Check the lines that print the contents of the `shifts.log` and `wcs.log` files.  If the associations were aligned 
       - The `shifts.log` files should indicate that at least a few dozen sources were identified in the different exposures and were aligned with RMS <~ 0.1 pixel
