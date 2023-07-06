@@ -50,6 +50,14 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
   - Send results to AWS/S3
   - Update cutout thumbnails sent to AWS/Lambda
   - Add to `combined_tiles` table for mosaic tiles and FITSMap
+  - At the end, you must push the updates to the file Mosaics/mosaics_log.txt to make sure the website displays correctly. From the command line:
+    
+    git add Mosaics/mosaic_log.txt
+    
+    git commit -m “updating mosaic log”
+
+    git push origin main
+    
 5. `Notebooks/make-map-tiles.ipynb`
   - Drizzle mosaic tiles on EC2
   - Make RGB tiles
