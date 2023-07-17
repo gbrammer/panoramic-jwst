@@ -47,6 +47,12 @@ def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS):
     if viz_catalogs is not None:
         make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=True)
 
+    eso_query_layer(field)
+    
+    mosfire_slits_layer(field)
+    
+    nirspec_slits_layer(field)
+
 
 def make_html_file(field, crval1, crval2, f_tiles):
     """
@@ -71,6 +77,9 @@ def make_html_file(field, crval1, crval2, f_tiles):
     HEAD += f"""
 <script src='{field}_tiles.js'> </script>
 <script src='{field}_vizier.js'> </script>
+<script src='{field}_eso.js'> </script>
+<script src='{field}_mosfire.js'> </script>
+<script src='{field}_nirspec.js'> </script>
 """
 
     HEAD += """
@@ -424,7 +433,18 @@ def get_tile_wcs(field, ref='09.09'):
     """
     import astropy.io.fits as pyfits
     import astropy.wcs as pywcs
-
+    
+    if field == 'abell2744':
+        ref = '08.08'
+    elif field == 'uds':
+        ref = '11.10'
+    elif field == 'cos':
+        ref = '16.16'
+    elif field.startswith('egs'):
+        ref = '10.14'
+    
+    print(f'WCS reference tile {ref} for field {field}')
+    
     ref_tile = db.SQL(f"""select * from combined_tiles where field = '{field}' AND tile = '{ref}'""")
 
     h = pyfits.Header()
@@ -436,7 +456,7 @@ def get_tile_wcs(field, ref='09.09'):
     return wcs
 
 
-def make_tile_overlay(field):
+def make_tile_overlay(field, ref_tile='09.09'):
     """
     Make a javascript overlay with links to the tile FITS files.
     
@@ -445,8 +465,11 @@ def make_tile_overlay(field):
     tiles = db.SQL(f"""select c.field, c.tile, c.filter, t.footprint from combined_tiles_filters c, combined_tiles t
     where (c.field = t.field) AND (c.tile = t.tile) AND c.field = '{field}'
     """)
-        
-    wcs = get_tile_wcs(field, ref='09.09')
+    
+    if field == 'abel2744':
+        ref_tile = '08.08'
+    
+    wcs = get_tile_wcs(field, ref=ref_tile)
 
     key = ['{field}-080-{tile}'.format(**row) for row in tiles]
     un = utils.Unique(key, verbose=False)
@@ -741,3 +764,321 @@ def make_desi_edr_layer(field, ref_tile='09.09'):
     os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read --quiet')
     
 
+def eso_query_layer(field, upload=True):
+    
+    import grizli.catalog
+    import astropy.io.fits as pyfits
+    
+    output_file = f'{field}_eso.js'
+
+    wcs = get_tile_wcs(field)
+    r0, d0 = wcs.calc_footprint().mean(axis=0)
+    ra_ref, dec_ref = r0, d0
+    
+    dd = 30. # arcmin
+    dx = dd/60/np.cos(d0/180*np.pi)
+    dy = dd/60
+    
+    # coord = "AND s_ra > 149. AND s_ra < 151 AND s_dec > 1.4 AND s_dec < 3.0" # COSMOS
+
+    coord = f"AND s_ra > {r0-dx} AND s_ra < {r0+dx}"
+    coord += f" AND s_dec > {d0-dy} AND s_dec < {d0+dy}" 
+
+    query = f"""SELECT * FROM ivoa.ObsCore
+    WHERE (obs_collection='ALMA' OR obs_collection='MUSE' OR obs_collection='MUSE-DEEP')
+    {coord}
+    """
+    #query = "SELECT * FROM ivoa.ObsCore WHERE obs_collection='MUSE-DEEP' OR obs_collection='MUSE'"
+
+    MAXREC=200000
+    qstr = query.replace("'","%27").replace(' ','+').replace('\n','+').replace('=','%3D')
+    qstr = qstr.replace('>','%3E').replace('<','%3C')
+    TAP_URL = "http://archive.eso.org/tap_obs/sync?REQUEST=doQuery&FORMAT=fits&LANG=ADQL&MAXREC={0}&QUERY={1}"
+    SEND = TAP_URL.format(MAXREC, qstr)
+    print(SEND)
+
+    # wcs = pywcs.WCS(_h)
+
+    imq = pyfits.open(SEND)
+    alma = utils.GTable()
+    for c in imq[1].data.columns:
+        if len(imq[1].data[c.name]) > 0:
+            alma[c.name] = imq[1].data[c.name]
+
+    alma['obs_collection'] = [o.strip() for o in alma['obs_collection']]
+
+    muse = alma['obs_collection'] == 'MUSE'
+    alma['filter'][muse] = '0'
+
+    muse = alma['obs_collection'] == 'MUSE-DEEP'
+    alma['filter'][muse] = '1'
+
+    keep = np.array([s.startswith('POLY') for s in alma['s_region']])
+    alma = alma[keep]
+    
+    print(f'Full ESO query: {len(alma)}')
+    if len(alma) == 0:
+        return True
+        
+    with open(output_file,'w') as fp:
+    
+        fp.write('    // ALMA \n')
+    
+        un = utils.Unique(alma['filter'], verbose=False)
+
+        for k, sel in un:
+            if sel.sum() > 100000:
+                continue
+            
+            if k == '0':
+                key = f'MUSE: {sel.sum()}'
+                color = 'magenta'
+            elif k == '1':
+                key = f'MUSE-DEEP: {sel.sum()}'
+                color = 'purple'
+            else:
+                key = f'ALMA Band {k}: {sel.sum()}'
+                color='orange'
+            
+            fp.write(f"    var alma_overlays_{k} = [];\n")
+
+            print(key, sel.sum())
+            regs = ' '.join([p for p in alma['s_region'][sel]])
+            sr = utils.SRegion(regs)
+        
+            ix = np.where(sel)[0]
+            area = sr.sky_area()
+            center = sr.centroid
+
+            for i, rd in enumerate(sr.xy):
+                xy = wcs.all_world2pix(rd, 0)
+            
+                poly = ','.join([f'[{c[1]:.1f}, {c[0]:.1f}]' for c in xy])
+
+                if xy.shape[0] > 16:
+                    sri = utils.SRegion('CIRCLE({0},{1},{2}")'.format(*center[i], np.sqrt(area[i].value/np.pi)*60.), wrap=False, ncircle=16)
+                    xyi = wcs.all_world2pix(*sri.xy[0].T, 0)
+                    xyl = np.array(xyi[::-1]).T.tolist()
+                    xyls = ','.join(['[{0:.1f},{1:.1f}]'.format(*r) for r in xyl])
+                
+                    if np.allclose(area[i], sri.sky_area()[0], atol=0.1):
+                        poly = xyls
+                        
+                title = alma['obs_title'][ix][i].strip().replace("'",'')
+                pi = alma['obs_creator_name'][ix][i].split(',')[0].strip().replace("'",'')
+                targ = alma['target_name'][ix][i].strip().replace("'",'')
+                url = alma['access_url'][ix][i].strip()
+            
+                if 'ID?ADP' in url:
+                    adp = url.split('ID?ADP')[1]
+                    url = f'https://archive.eso.org/dataset/ADP{adp}'
+                elif 'almascience' in url:
+                    url += f'&observationsSourceName={targ}'
+                
+                prop = alma['proposal_id'][ix][i].strip()
+            
+                pop = f"'{title} <br> {prop} ({pi}) : <a href=\"{url}\" > {targ} </a>'"
+                
+                if k == '0':
+                    tt = f".bindTooltip('MUSE {targ}', {{ direction: 'auto'}})"
+                elif k == '1':
+                    tt = f".bindTooltip('MUSE-DEEP {targ}', {{ direction: 'auto'}})"
+                else:
+                    tt = f".bindTooltip('ALMA Band {k} {targ}', {{ direction: 'auto'}})"
+
+                #pop += f" <img src=\"https://s3.amazonaws.com/mosfire-pipeline/Spectra/{mf['file'][i].replace('sp.fits','sp2d.png')}\" width=500px />"
+                #pop += f" <br> <img src=\"https://s3.amazonaws.com/mosfire-pipeline/Spectra/{mf['file'][i].replace('sp.fits','sp_log1d.png')}\" width=500px />'"
+                row = f"\n    alma_overlays_{k}.push(L.polygon([{poly}],"
+                row += f" {{color: '{color}', weight:1, opacity:0.8, fill:false}}).bindPopup({pop}, {{minWidth: 500, maxWidth:520}}){tt});"
+                fp.write(row)
+        
+            row = f"    overlays['{key}'] = L.layerGroup(alma_overlays_{k});\n"
+            fp.write(row)
+    
+    if upload:
+        os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+
+
+def mosfire_slits_layer(field, upload=True):
+    """
+    Query database for MOSFIRE spectra
+    """
+    output_file = f'{field}_mosfire.js'
+
+    wcs = get_tile_wcs(field)
+    
+    r0, d0 = wcs.calc_footprint().mean(axis=0)
+    ra_ref, dec_ref = r0, d0
+    
+    dd = 30. # arcmin
+    dx = dd/60/np.cos(d0/180*np.pi)
+    dy = dd/60
+    
+    # coord = "AND s_ra > 149. AND s_ra < 151 AND s_dec > 1.4 AND s_dec < 3.0" # COSMOS
+
+    mf = db.SQL(f"""select file, slit_width, slit_length, skypa3, targoff, ra_slit, dec_slit, filter, datemask, target_name
+    from mosfire_extractions
+    where ra_slit > {r0-dx} AND ra_slit < {r0+dx}
+    AND dec_slit > {d0-dy} AND dec_slit < {d0+dy}""")
+
+    print('MOSFIRE N: ', len(mf))
+    
+    if len(mf) == 0:
+        return True
+        
+    with open(output_file,'w') as fp:
+
+        row = '    var mosfire_slits = [];\n    var mosfire_targets = [];'
+        fp.write(row)
+
+        for i in range(len(mf)):
+            sx = np.array([-0.5, -0.5, 0.5, 0.5, -0.5])*mf['slit_width'][i]/0.08
+            sy = (np.array([-0.5, 0.5, 0.5, -0.5, -0.5])*mf['slit_length'][i])/0.08
+            syo = (np.array([-0.5, 0.5, 0.5, -0.5, -0.5])*mf['slit_width'][i] + mf['targoff'][i])/0.08 # length of sp2d.png cutout
+            theta = -mf['skypa3'][i]/180*np.pi
+            _mat = np.array([[np.cos(theta), -np.sin(theta)],
+                             [np.sin(theta), np.cos(theta)]])
+
+            srot = np.array([sx, sy]).T.dot(_mat)
+            srot += np.squeeze(wcs.all_world2pix([mf['ra_slit'][i]], 
+                                                 [mf['dec_slit'][i]], 1))
+            trot = np.array([sx, syo]).T.dot(_mat)
+            trot += np.squeeze(wcs.all_world2pix([mf['ra_slit'][i]], 
+                                                 [mf['dec_slit'][i]], 1))
+        
+            # plt.plot(*srot.T)
+        
+            poly = ','.join([f'[{c[1]:6.1f}, {c[0]:6.1f}]' for c in srot])
+            tpoly = ','.join([f'[{c[1]:6.1f}, {c[0]:6.1f}]' for c in trot])
+        
+            pop = f"'{mf['datemask'][i]} <b> {mf['target_name'][i]} </b> ({mf['filter'][i]}) <br> "
+            pop += f" <img src=\"https://s3.amazonaws.com/mosfire-pipeline/Spectra/{mf['file'][i].replace('sp.fits','sp2d.png')}\" width=500px />"
+            pop += f" <br> <img src=\"https://s3.amazonaws.com/mosfire-pipeline/Spectra/{mf['file'][i].replace('sp.fits','sp_log1d.png')}\" width=500px />'"
+            row = f"\n    mosfire_slits.push(L.polygon([{poly}],"
+            row += f" {{color: 'pink', weight:1, opacity:0.8, fill:false}}).bindPopup({pop}));"
+            fp.write(row+'\n')
+            row = f"\n    mosfire_targets.push(L.polygon([{tpoly}],"
+            row += f" {{color: 'magenta', weight:1, opacity:0.8, fill:false}}).bindPopup({pop}));"
+            #print(row)
+            fp.write(row+'\n')
+    
+        if len(mf) > 0:
+            row = "    overlays['MOSFIRE slits'] = L.layerGroup(mosfire_slits);\n"
+            fp.write(row)
+            row = "    overlays['MOSFIRE targets'] = L.layerGroup(mosfire_targets);\n"
+            fp.write(row)
+    
+    if upload:
+        os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+
+
+def nirspec_slits_layer(field, upload=True):
+    """
+    Query database for NIRSpec slits
+    """
+    output_file = f'{field}_nirspec.js'
+
+    wcs = get_tile_wcs(field)
+    
+    r0, d0 = wcs.calc_footprint().mean(axis=0)
+    ra_ref, dec_ref = r0, d0
+    
+    dd = 30. # arcmin
+    dx = dd/60/np.cos(d0/180*np.pi)
+    dy = dd/60
+    
+    slits = db.SQL(f"""select program, msametfl, msametid, slitlet_id, grating, filter,
+    ra, dec, is_source, footprint
+    from nirspec_slits
+    where patt_num = 1 
+    AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec)
+    """)
+    
+    if len(slits) == 0:
+        return True
+        
+    keys = ['{program} {grating} {filter}'.format(**row) for row in slits]
+    
+    un = utils.Unique(keys)
+    
+    rows = []
+    
+    rows.append("var sprop0 = {color: 'white', weight:1, opacity:0.8, fill:false};")
+    rows.append("var sprop1 = {color: 'magenta', weight:1, opacity:0.8, fill:false};")
+    
+    for j, k in enumerate(un.values):
+        #kl = 'slit_'+k.lower().replace(' ','_')
+        kl = f'nrs_{j}'
+        rows.append(f'var {kl} = []; // {k}')
+        for row in slits[un[k]]:
+            sr = utils.SRegion(row['footprint'])
+            
+            xy = wcs.all_world2pix(sr.xy[0], 0)
+            srx = utils.SRegion(np.array(xy)[:,::-1], wrap=False)
+            
+            prop = 'sprop1' if row['is_source'] else 'sprop0'
+            poly = srx.polystr(precision=1)[0].replace('(','[').replace(')',']')
+            row = f"{kl}.push(L.polygon([{poly}],{prop}));"
+            #row += f" {{color: '{color}', weight:1, opacity:0.8, fill:false}}));"
+            
+            rows.append(row)
+            
+        rows.append(f"overlays['Slits {k}'] = L.layerGroup({kl});")
+    
+    
+    # Extractions
+    nre = db.SQL(f"""select root, file, ra, dec, grating, filter, SUBSTR(dataset,4,4) as program
+    from nirspec_extractions
+    WHERE polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec)
+    
+    """)
+    
+    if len(nre) > 0:
+        
+        print(f'NIRSPec: {len(nre)} extractions')
+        
+        keys = ['{program} {grating} {filter}'.format(**row) for row in nre]
+        un = utils.Unique(keys)
+        
+        #nre['comment'] = ['targetid={targetid} <br> {spectype} z={z:.4f} &plusmn; {zerr:.4f}'.format(**row) for row in edr]
+        nre['popup'] = ['<img src="https://s3.amazonaws.com/msaexp-nirspec/extractions/{root}/{file}.fnu.png" height=300px/>'.format(**row).replace('.spec.fits','')
+                         for row in nre]
+        
+        nre['x'], nre['y'] = wcs.all_world2pix(nre['ra'], nre['dec'], 0)
+        
+        rows.append("var spec_tt = {direction:'auto'};")
+        rows.append("var spec_m = {color:'salmon',radius:8,weight:2,opacity:0.95,fill:false};")
+        for j, k in enumerate(un.values):
+            #kl = 'spec_'+k.lower().replace(' ','_')
+            kl = f'nre_{j}'
+            rows.append(f'var {kl} = []; // {k}')
+            for row in nre[un[k]]:
+                
+                marker = f"""L.circleMarker([{row['y']:.1f},{row['x']:.1f}], spec_m).bindTooltip('{row['popup']}', spec_tt)"""
+                
+                # if popups is not None:
+                #     marker += f""".bindPopup('{popups[i]}', {{ direction: 'auto'}})"""
+                
+                rows.append(f'{kl}.push({marker});')
+                
+                # sr = utils.SRegion(row['footprint'])
+                #
+                # xy = wcs.all_world2pix(sr.xy[0], 0)
+                # srx = utils.SRegion(np.array(xy), wrap=False)
+                #
+                # color = 'magenta' if row['is_source'] else 'white'
+                # poly = srx.polystr(precision=1)[0].replace('(','[').replace(')',']')
+                # row = f"{kl}.push(L.polygon([{poly}],"
+                # row += f" {{color: '{color}', weight:1, opacity:0.8, fill:false}}));"
+            
+                # rows.append(row)
+            
+            rows.append(f"overlays['Spectra {k}'] = L.layerGroup({kl});")
+        
+    with open(output_file,'w') as fp:
+        for row in rows:
+            fp.write(row+'\n')
+    
+    if upload:
+        os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+            
