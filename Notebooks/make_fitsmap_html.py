@@ -988,7 +988,7 @@ def nirspec_slits_layer(field, upload=True):
     dy = dd/60
     
     slits = db.SQL(f"""select program, msametfl, msametid, slitlet_id, grating, filter,
-    ra, dec, is_source, footprint
+    ra, dec, source_id, is_source, footprint
     from nirspec_slits
     where patt_num = 1 
     AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec)
@@ -997,7 +997,8 @@ def nirspec_slits_layer(field, upload=True):
     if len(slits) == 0:
         return True
         
-    keys = ['{program} {grating} {filter}'.format(**row) for row in slits]
+    keys = ['{program} {grating} {filter}'.format(**row).replace(' CLEAR','')
+            for row in slits]
     
     un = utils.Unique(keys)
     
@@ -1018,7 +1019,13 @@ def nirspec_slits_layer(field, upload=True):
             
             prop = 'sprop1' if row['is_source'] else 'sprop0'
             poly = srx.polystr(precision=1)[0].replace('(','[').replace(')',']')
-            row = f"{kl}.push(L.polygon([{poly}],{prop}));"
+            
+            marker = f'L.polygon([{poly}],{prop})'
+            
+            if row['is_source']:
+                marker += ".bindTooltip('{program} {grating} {filter} #{source_id}')".format(**row).replace(' CLEAR','')
+                
+            row = f"{kl}.push({marker});"
             #row += f" {{color: '{color}', weight:1, opacity:0.8, fill:false}}));"
             
             rows.append(row)
@@ -1034,46 +1041,58 @@ def nirspec_slits_layer(field, upload=True):
     """)
     
     if len(nre) > 0:
-        
-        print(f'NIRSPec: {len(nre)} extractions')
-        
-        keys = ['{program} {grating} {filter}'.format(**row) for row in nre]
-        un = utils.Unique(keys)
-        
-        #nre['comment'] = ['targetid={targetid} <br> {spectype} z={z:.4f} &plusmn; {zerr:.4f}'.format(**row) for row in edr]
-        nre['popup'] = ['<img src="https://s3.amazonaws.com/msaexp-nirspec/extractions/{root}/{file}.fnu.png" height=300px/>'.format(**row).replace('.spec.fits','')
-                         for row in nre]
-        
-        nre['x'], nre['y'] = wcs.all_world2pix(nre['ra'], nre['dec'], 0)
-        
-        rows.append("var spec_tt = {direction:'auto'};")
-        rows.append("var spec_m = {color:'salmon',radius:8,weight:2,opacity:0.95,fill:false};")
-        for j, k in enumerate(un.values):
-            #kl = 'spec_'+k.lower().replace(' ','_')
-            kl = f'nre_{j}'
-            rows.append(f'var {kl} = []; // {k}')
-            for row in nre[un[k]]:
-                
-                marker = f"""L.circleMarker([{row['y']:.1f},{row['x']:.1f}], spec_m).bindTooltip('{row['popup']}', spec_tt)"""
-                
-                # if popups is not None:
-                #     marker += f""".bindPopup('{popups[i]}', {{ direction: 'auto'}})"""
-                
-                rows.append(f'{kl}.push({marker});')
-                
-                # sr = utils.SRegion(row['footprint'])
-                #
-                # xy = wcs.all_world2pix(sr.xy[0], 0)
-                # srx = utils.SRegion(np.array(xy), wrap=False)
-                #
-                # color = 'magenta' if row['is_source'] else 'white'
-                # poly = srx.polystr(precision=1)[0].replace('(','[').replace(')',']')
-                # row = f"{kl}.push(L.polygon([{poly}],"
-                # row += f" {{color: '{color}', weight:1, opacity:0.8, fill:false}}));"
+        nre['grade'] = -1
+        nre['z'] = -1.
+    
+        nrz = db.SQL(f"""select nz.root, nz.file, nz.z as zauto, nm.z as z, grade
+        from nirspec_redshifts nz, nirspec_redshifts_manual nm, nirspec_extractions ne
+        WHERE nz.file = nm.file AND ne.file = nz.file
+        AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec)
+    
+        """)
+    
+        for i, row in enumerate(nrz):
+            for k in ['grade','z']:
+                nre[k][nre['file'] == row['file']] = nrz[k][i]
             
-                # rows.append(row)
-            
-            rows.append(f"overlays['Spectra {k}'] = L.layerGroup({kl});")
+        if len(nre) > 0:
+        
+            print(f'NIRSPec: {len(nre)} extractions')
+        
+            keys = ['{program} {grating} {filter}'.format(**row) for row in nre]
+            un = utils.Unique(keys)
+        
+            #nre['comment'] = ['targetid={targetid} <br> {spectype} z={z:.4f} &plusmn; {zerr:.4f}'.format(**row) for row in edr]
+            nre['tooltip'] = ['{file} z={z:.4f} grade={grade} </br> <img src="https://s3.amazonaws.com/msaexp-nirspec/extractions/{root}/{file}.fnu.png" height=300px/>'.format(**row).replace('.spec.fits','')
+                             for row in nre]
+            nre['popup'] = ['<a href="https://s3.amazonaws.com/msaexp-nirspec/extractions/{root}/{file}"/> {file} </a> z={z:.4f} grade={grade} </br> <img src="https://s3.amazonaws.com/msaexp-nirspec/extractions/{root}/{file}.fnu.png" height=300px/> <br> <img src="https://s3.amazonaws.com/msaexp-nirspec/extractions/{root}/{file}.flam.png" height=300px/>'.format(**row).replace('.spec.fits.f','.f')
+                             for row in nre]
+        
+            nre['x'], nre['y'] = wcs.all_world2pix(nre['ra'], nre['dec'], 0)
+        
+            rows.append("var spec_tt = {direction:'auto'};")
+            rows.append("var spec_m3 = {color:'#7AE27A',radius:8,weight:2,opacity:0.95,fill:false};")
+            rows.append("var spec_m2 = {color:'#E2DF7A',radius:8,weight:2,opacity:0.95,fill:false};")
+            rows.append("var spec_m0 = {color:'salmon',radius:8,weight:2,opacity:0.95,fill:false};")
+        
+            for j, k in enumerate(un.values):
+                #kl = 'spec_'+k.lower().replace(' ','_')
+                kl = f'nre_{j}'
+                rows.append(f'var {kl} = []; // {k}')
+                for row in nre[un[k]]:
+                
+                    if row['grade'] == 3:
+                        gm = 'spec_m3'
+                    elif row['grade'] == 2:
+                        gm = 'spec_m2'
+                    else:
+                        gm = 'spec_m0'
+                    
+                    marker = f"""L.circleMarker([{row['y']:.1f},{row['x']:.1f}], {gm}).bindTooltip('{row['tooltip']}', spec_tt).bindPopup('{row['popup']}')"""
+                
+                    rows.append(f'{kl}.push({marker});')
+                            
+                rows.append(f"overlays['Spectra {k}'] = L.layerGroup({kl});")
         
     with open(output_file,'w') as fp:
         for row in rows:
