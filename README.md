@@ -46,6 +46,9 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
     3. Flip the switch `If 0:` > `If 1:` and run at `## Launch EC2 instances`.
     4. This will launch _N_ EC2 instances that will each run through the processing of the `status=0` associations.  It takes some time for the instances to spin up, but you can then monitor their process by rerunning the cells at `# Check status of associations in the DB`.  At first there will be _N_ > 0 entries with `status=0` in the query there, and eventually you'll see them start to change to `status=1` as they're processed.  After a few minutes, all of the `status=0` associations should be done and the number you saw originally should now be under `status=2`, meaning "Done". There are two copies of the status query cell to make it easier to run them one at a time and see how the numbers change.
 4. `Notebooks/panoramic-mosaics.ipynb`
+  - **In detail**:
+    1. I found that I need to run this command to downgrade a package, which otherwise crashes the kernel during drizzle:
+       python -m pip install 'traitlets==5.6.0' --force-reinstall
   - Make 20/40 mas SW/LW mosaics of each PANORAMIC field
   - Send results to AWS/S3
   - Update cutout thumbnails sent to AWS/Lambda
