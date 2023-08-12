@@ -68,6 +68,7 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
   - **In detail**:
     1. Make sure to flip from 0 to 1 at Change combined_tiles status = 3 to 0 and launch EC2 with run_all_tiles
   
-## Mosaic products
+## Data summary
 
-https://s3.amazonaws.com/grizli-panoramic/mosaics/mosaics.html
+- Summary: [https://gbrammer.github.io/panoramic-jwst/Mosaics/summary](https://gbrammer.github.io/panoramic-jwst/Mosaics/summary)
+- Mosaics: [https://s3.amazonaws.com/grizli-panoramic/mosaics/mosaics.html](https://s3.amazonaws.com/grizli-panoramic/mosaics/mosaics.html)
