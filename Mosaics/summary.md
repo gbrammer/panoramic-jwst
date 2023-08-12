@@ -1,4 +1,6 @@
 
+![Alt text](../PanoramicLogo.png?raw=true "PanoramicLogo")
+
 PANORAMIC Fields
 ----------------
 
