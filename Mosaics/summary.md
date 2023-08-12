@@ -8,7 +8,7 @@ PANORAMIC Fields
 - [Visit Status](https://www.stsci.edu/cgi-bin/get-visit-status?id=2514&markupFormat=html&observatory=JWST)
 
 | field        | RA,Dec             | Date       | F115W  | F150W  | F200W  | F277W  | F356W  | F410M  | F444W  |
-| ------------ | ------------------ | -----------| -------| -------| -------| -------| -------| -------| -------|
+| :----------: | :----------------: | ----------:|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
 | [j000352m1120](https://s3.amazonaws.com/grizli-panoramic/mosaics/v6.0/j000352m1120/index.html) | [   0.960,  -11.327](https://s3.amazonaws.com/grizli-v2/ClusterTiles/Map/panoramic-j000352m1120/index.html) | 2023-07-14 |   1.2  |   1.2  |   1.2  |   1.2  |   1.2  |        |   1.2  |
 | [j010408m5508](https://s3.amazonaws.com/grizli-panoramic/mosaics/v6.0/j010408m5508/index.html) | [  16.039,  -55.141](https://s3.amazonaws.com/grizli-v2/ClusterTiles/Map/panoramic-j010408m5508/index.html) | 2023-08-05 |   0.9  |   0.9  |   0.9  |   0.9  |   0.9  |        |   0.9  |
 | [j021728m0214](https://s3.amazonaws.com/grizli-panoramic/mosaics/v6.0/j021728m0214/index.html) | [  34.363,   -2.229](https://s3.amazonaws.com/grizli-v2/ClusterTiles/Map/panoramic-j021728m0214/index.html) | 2023-08-06 |   7.6  |   7.6  |   3.8  |   3.8  |   7.6  |        |   7.6  |
