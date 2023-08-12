@@ -4,6 +4,7 @@ PANORAMIC Fields
 
 - Exposure times in ks
 - [Visit Status](https://www.stsci.edu/cgi-bin/get-visit-status?id=2514&markupFormat=html&observatory=JWST)
+
 | field        | RA,Dec             | Date       | F115W  | F150W  | F200W  | F277W  | F356W  | F410M  | F444W  |
 | ------------ | ------------------ | -----------| -------| -------| -------| -------| -------| -------| -------|
 | [j000352m1120](https://s3.amazonaws.com/grizli-panoramic/mosaics/v6.0/j000352m1120/index.html) | [   0.960,  -11.327](https://s3.amazonaws.com/grizli-v2/ClusterTiles/Map/panoramic-j000352m1120/index.html) | 2023-07-14 |   1.2  |   1.2  |   1.2  |   1.2  |   1.2  |        |   1.2  |

@@ -1036,7 +1036,7 @@ def nirspec_slits_layer(field, upload=True):
     # Extractions
     nre = db.SQL(f"""select root, file, ra, dec, grating, filter, SUBSTR(dataset,4,4) as program
     from nirspec_extractions
-    WHERE polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec)
+    WHERE polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec) and root not like 'uncover-5m%%'
     
     """)
     
@@ -1047,7 +1047,7 @@ def nirspec_slits_layer(field, upload=True):
         nrz = db.SQL(f"""select nz.root, nz.file, nz.z as zauto, nm.z as z, grade
         from nirspec_redshifts nz, nirspec_redshifts_manual nm, nirspec_extractions ne
         WHERE nz.file = nm.file AND ne.file = nz.file
-        AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec)
+        AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec) and nz.root not like 'uncover-5m%%'
     
         """)
     
