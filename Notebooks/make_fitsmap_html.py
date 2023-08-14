@@ -20,7 +20,7 @@ VIZ_CATALOGS = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
                }
 
 
-def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS):
+def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10):
     """
     Run all steps to make the FITSMap HTML file and the catalog overlays
     """
@@ -31,10 +31,12 @@ def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS):
 
     f_tiles = db.SQL(f"""select * from combined_tiles_filters where field = '{field}'""")
     un = utils.Unique(f_tiles['filter'], verbose=True)
-
+    
+    ref_tile, wcs = get_tile_wcs(field, ref='09.09')
+    
     ctiles = db.SQL(f"""select * from combined_tiles
     where field = '{field}'
-    and tile = '09.09'
+    and tile = '{ref_tile}'
     """)
 
     crval1 = ctiles['crval1'][0]
@@ -45,7 +47,7 @@ def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS):
     make_tile_overlay(field)
 
     if viz_catalogs is not None:
-        make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=10, with_desi=True)
+        make_vizier_overlay(field, viz_catalogs=viz_catalogs, radius=catalog_radius, with_desi=True)
 
     eso_query_layer(field)
     
@@ -156,13 +158,19 @@ def make_html_file(field, crval1, crval2, f_tiles):
     
     // var overlays = {}; // initialized in tiles.js
     """
-
+    
+    crpix = 1152.0, 1152.0
+    
+    if field == 'uds':
+        crpix = 2176.0, 4224.0
+        crval1, crval2 = 34.40869, -5.16299
+        
     FOOTER = f"""
     var layerControl = L.control.layers(baseLayers, overlays);
 
     // WCS parameters
     // {field}
-    var crpix = [1152.0, 1152.0]; 
+    var crpix = [{crpix[0]:.1f}, {crpix[1]:.1f}]; 
     var crval = [{crval1:.6f}, {crval2:.6f}]; 
     var cdmatrix = [[-2.222222e-05, 0.000000e+00],
                     [0.000000e+00, 2.222222e-05]];
@@ -346,11 +354,16 @@ def make_html_file(field, crval1, crval2, f_tiles):
         cutout += '&dec=' + rd[1].toFixed(7);
         query_html += ' | <a href="'+cutout+'">NIRCam</a>';
     """
-
+    
     ### Layers by filter
     un = utils.Unique(f_tiles['filter'], verbose=False)
-
-    all_filters = ','.join([v.lower() for v in un.values])
+    
+    all_filters = []
+    for v in un.values:
+        if 'clear' in v.lower():
+            all_filters.append(v)
+            
+    all_filters = ','.join([v.lower() for v in all_filters])
     # if 'f814w' not in all_filters:
     #     all_filters = 'f814w,' + all_filters
 
@@ -361,12 +374,22 @@ def make_html_file(field, crval1, crval2, f_tiles):
         query_html += ' | <a href="'+cut2+'">All filters</a>';
     """
 
-    FOOTER += """
+    if field in ['uds']:
+        FOOTER += """
+        var miricut = 'https://grizli-cutout.herokuapp.com/thumb?all_filters=True&size=4&scl=1&asinh=True&filters=f150w-clear,f444w-clear,f770w&rgb_scl=0.8,1.2,1.0&pl=2.0';
+        miricut += '&ra=' + rd[0].toFixed(7);
+        miricut += '&dec=' + rd[1].toFixed(7);
+        query_html += ' | <a href="'+miricut+'">NRC+MIR</a>';
+        """
+    else:
+        FOOTER += """
         // var miricut = 'https://grizli-cutout.herokuapp.com/thumb?all_filters=True&size=4&scl=1&asinh=True&filters=f150w-clear,f444w-clear,f770w&rgb_scl=0.8,1.2,1.0&pl=2.0';
         // miricut += '&ra=' + rd[0].toFixed(7);
         // miricut += '&dec=' + rd[1].toFixed(7);
         // query_html += ' | <a href="'+miricut+'">NRC+MIR</a>';
-
+        """
+        
+    FOOTER += """
         $('#query').html(query_html);
     }
     
@@ -453,7 +476,7 @@ def get_tile_wcs(field, ref='09.09'):
         
     wcs = pywcs.WCS(h)
 
-    return wcs
+    return ref, wcs
 
 
 def make_tile_overlay(field, ref_tile='09.09'):
@@ -469,7 +492,7 @@ def make_tile_overlay(field, ref_tile='09.09'):
     if field == 'abel2744':
         ref_tile = '08.08'
     
-    wcs = get_tile_wcs(field, ref=ref_tile)
+    ref_tile, wcs = get_tile_wcs(field, ref=ref_tile)
 
     key = ['{field}-080-{tile}'.format(**row) for row in tiles]
     un = utils.Unique(key, verbose=False)
@@ -544,7 +567,7 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
 
     has_catalog = []
 
-    wcs = get_tile_wcs(field, ref=ref_tile)
+    ref_tile, wcs = get_tile_wcs(field, ref=ref_tile)
 
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
@@ -622,18 +645,30 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
         elif 'DLyAFit' in vcat.colnames:
             vcat['comment'] = ['{ID} {DataSet}  zMUSE={z:.4f}'.format(**row)
                             for row in vcat]
-
+        elif 'VANDELS' in vname:
+            # print('update VANDELS comment')
+            vcat['comment'] = ['{Name}  zsp={zsp:.4f}'.format(**row)
+                               for row in vcat]
+        elif 'KMOS3D' in vname:
+            vcat['comment'] = ['KMOS3D {ID}  z={z:.4f}'.format(**row)
+                               for row in vcat]
+            
         else:
             vcat['comment'] = vname
         
         sizes = None
-        if ('XMM' in vname):
+        if ('XMM' in vname) | ('X-UDS' in vname):
             for c in ['ePos','srcML']:
                 if c in vcat.colnames:
                     sizes = vcat[c]
                     print(f'       - Use {c} for source sizes')
                     break
-
+        
+        if 'AS2UDS' in vname:
+            sizes = np.ones(len(vcat))*0.25
+        elif 'KMOS3D' in vname:
+            sizes = np.ones(len(vcat))*0.2
+            
         #col = cm(np.clip((vcat['SNR']-5)/8, 0,1)*0.7+0.2)
         
         key = vname.split()[0].replace('-','_').lower()
@@ -688,7 +723,7 @@ def make_desi_edr_layer(field, ref_tile='09.09'):
 
     output_file = f'{field}_vizier.js'
 
-    wcs = get_tile_wcs(field, ref=ref_tile)
+    ref_tile, wcs = get_tile_wcs(field, ref=ref_tile)
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
 
@@ -771,7 +806,7 @@ def eso_query_layer(field, upload=True):
     
     output_file = f'{field}_eso.js'
 
-    wcs = get_tile_wcs(field)
+    ref_tile, wcs = get_tile_wcs(field)
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
     
@@ -905,7 +940,7 @@ def mosfire_slits_layer(field, upload=True):
     """
     output_file = f'{field}_mosfire.js'
 
-    wcs = get_tile_wcs(field)
+    ref_tile, wcs = get_tile_wcs(field)
     
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
@@ -978,7 +1013,7 @@ def nirspec_slits_layer(field, upload=True):
     """
     output_file = f'{field}_nirspec.js'
 
-    wcs = get_tile_wcs(field)
+    ref_tile, wcs = get_tile_wcs(field)
     
     r0, d0 = wcs.calc_footprint().mean(axis=0)
     ra_ref, dec_ref = r0, d0
