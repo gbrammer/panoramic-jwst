@@ -6,6 +6,7 @@ PANORAMIC Fields
 
 - Exposure times in ks
 - [Visit Status](https://www.stsci.edu/cgi-bin/get-visit-status?id=2514&markupFormat=html&observatory=JWST)
+- Updated: Tue Aug 15 15:29:18 2023
 
 | field        | RA,Dec             | Date       | F115W  | F150W  | F200W  | F277W  | F356W  | F410M  | F444W  |
 | :----------: | :----------------: | ----------:|-------:|-------:|-------:|-------:|-------:|-------:|-------:|
