@@ -7,6 +7,9 @@ Mosaics/error_*
 Mosaics/sync_*
 Mosaics/*.js
 
+Mosaics/*html
+Mosaics/*wcs.*
+
 LocalWorkspace/*
 
 FRESCO/fresco*
