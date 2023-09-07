@@ -20,7 +20,7 @@ VIZ_CATALOGS = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
                }
 
 
-def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10):
+def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10, output_html='index.html'):
     """
     Run all steps to make the FITSMap HTML file and the catalog overlays
     """
@@ -42,7 +42,7 @@ def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10):
     crval1 = ctiles['crval1'][0]
     crval2 = ctiles['crval2'][0]
 
-    make_html_file(field, crval1, crval2, f_tiles)
+    make_html_file(field, crval1, crval2, f_tiles, output_html=output_html)
 
     make_tile_overlay(field)
 
@@ -56,7 +56,7 @@ def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10):
     nirspec_slits_layer(field)
 
 
-def make_html_file(field, crval1, crval2, f_tiles):
+def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
     """
     Make FITSMap HTML file for a given field
     """
@@ -446,8 +446,8 @@ def make_html_file(field, crval1, crval2, f_tiles):
         
         fp.write(FOOTER)
         
-    os.system(f'aws s3 cp {html_file} s3://{S3_MAP_PREFIX}/{field}/index.html --acl public-read')
-    print(f"https://s3.amazonaws.com/{S3_MAP_PREFIX}/{field}/index.html")
+    os.system(f'aws s3 cp {html_file} s3://{S3_MAP_PREFIX}/{field}/{output_html} --acl public-read')
+    print(f"https://s3.amazonaws.com/{S3_MAP_PREFIX}/{field}/{output_html}")
 
 
 def get_tile_wcs(field, ref='09.09'):
@@ -457,7 +457,7 @@ def get_tile_wcs(field, ref='09.09'):
     import astropy.io.fits as pyfits
     import astropy.wcs as pywcs
     
-    if field == 'abell2744':
+    if field in ('abell2744', 'macs1423', 'abell370', 'macs0416', 'macs1149'):
         ref = '08.08'
     elif field == 'uds':
         ref = '11.10'
@@ -1067,6 +1067,17 @@ def nirspec_slits_layer(field, upload=True):
             
         rows.append(f"overlays['Slits {k}'] = L.layerGroup({kl});")
     
+    # Stop for CANUCS
+    if field in ('macs0416', 'abell370', 'macs1423', 'macs0417'):
+        with open(output_file,'w') as fp:
+            for row in rows:
+                fp.write(row+'\n')
+    
+        if upload:
+            os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+
+        print(f'{field} in CANUCS, just make slits')
+        return True
     
     # Extractions
     nre = db.SQL(f"""select root, file, ra, dec, grating, filter, SUBSTR(dataset,4,4) as program
