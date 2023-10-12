@@ -362,7 +362,7 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
     for v in un.values:
         if 'clear' in v.lower():
             all_filters.append(v)
-            
+     
     all_filters = ','.join([v.lower() for v in all_filters])
     # if 'f814w' not in all_filters:
     #     all_filters = 'f814w,' + all_filters
@@ -424,9 +424,33 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
 
     with open(html_file,'w') as fp:
         fp.write(HEAD)
+
+        opt_filters = []
+        wfc3_filters = []
+        nrc_filters = []
+        miri_filters = []
         
-        field_filters = un.values + ['swrgb','lwrgb','ncrgb']
-        
+        for f in list(un.values):
+            if 'GR150' in f.upper():
+                continue
+
+            if 'CLEARP-' in f.upper():
+                f = f.upper().replace('CLEARP-','CLEARP_')
+                
+            if 'clear' in f.lower():
+                nrc_filters.append(f)
+            elif f.lower() in ['f560w','f770w','f1000w','f1280w','f1130w','f1500w','f1800w','f2100w','f2550w']:
+                miri_filters.append(f)
+            elif f.lower()[:2] in ['f0','f1']:
+                wfc3_filters.append(f)
+            elif '-gr' in f.upper():
+                opt.filters.append(f.upper().replace('-GR','_GR'))
+            else:
+                opt_filters.append(f.upper().replace('-','_'))
+                
+        # field_filters = un.values + ['swrgb','lwrgb','ncrgb']
+        field_filters = opt_filters + wfc3_filters + nrc_filters + miri_filters + ['swrgb','lwrgb','ncrgb']
+
         for f in field_filters:
             fi = f.lower()
             line = f"""var {f_low}_080_{fi.split('-clear')[0]} =  L.tileLayer("{f_low}_080_{fi}"""
@@ -840,6 +864,15 @@ def eso_query_layer(field, upload=True):
         if len(imq[1].data[c.name]) > 0:
             alma[c.name] = imq[1].data[c.name]
 
+    if len(alma) == 0:
+        with open(output_file,'w') as fp:
+            fp.write('    // ALMA \n')
+        
+        if upload:
+            os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+
+        return None
+        
     alma['obs_collection'] = [o.strip() for o in alma['obs_collection']]
 
     muse = alma['obs_collection'] == 'MUSE'
