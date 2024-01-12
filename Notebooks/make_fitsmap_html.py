@@ -15,10 +15,18 @@ VIZ_CATALOGS = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
                 'GAIA DR3': ('I/355/gaiadr3', 'lightblue'),
                 'XMM-DR11 (Traulson+22)': ('IX/66/xmm411st', 'pink'),
                 'XMM-DR12 (Webb+23)':('IIX/68/xmm4d12s', 'pink'),
-                'SDSS DR16Q (Lyke+20)': ('VII/289/superset', 'magenta')
+                'SDSS DR16Q (Lyke+20)': ('VII/289/superset', 'magenta'),
+                'CDFS 7Ms (Luo+17)': ('J/ApJS/228/2/sources', 'pink'),
+                'ACES (Cooper+12)': ('J/MNRAS/425/2116/table2', 'olive'),
+                'ALESS (Hodge+13)': ('J/ApJ/768/91/aless', 'brown'),
+                'ALMA SMGs (Danielson+17)': ('J/ApJ/840/78/table1', 'brown'),
+                'ALMA SFGs (Tadaki+20)': ('J/ApJ/901/74/table1', 'brown'),
+                'S2CLS (Geach+17)': ('J/MNRAS/465/1789/s2clsdr1', 'brown'),
+                'DEEP2 (Matthews+13)': ('III/268/deep2all', 'olive'),
+                'AEGIS-X (Nandra+15)': ('J/ApJS/220/10/aegisxd', 'pink'),
+                'DEIMOS (Pharo+22)': ('J/ApJS/261/12/catalog', 'olive'),
                 #'Chandra (Evans+2019)': ('IX/57/csc2master', 'pink'), # Doesn't work?
                }
-
 
 def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10, output_html='index.html'):
     """
@@ -164,7 +172,10 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
     if field == 'uds':
         crpix = 2176.0, 4224.0
         crval1, crval2 = 34.40869, -5.16299
-        
+    elif field == 'j013804m2156':
+        # tiles made assuming 40 - 9,9 but are 8,8
+        crpix = 1152.-3*60./0.1-256, 1152.-3*60/0.1-256
+    
     FOOTER = f"""
     var layerControl = L.control.layers(baseLayers, overlays);
 
@@ -320,9 +331,9 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
     
     updateLocationBar = function(){
         var rd = pixToSky(map.getCenter());
-        var params = 'coord=' + rd[0].toFixed(7);
+        var params = 'zoom=' + map.getZoom();
+        params += '&coords=' + rd[0].toFixed(7);
         params += ',' + rd[1].toFixed(7);
-        params += '&zoom=' + map.getZoom();
         var param_url = window.location.href.split('?')[0] + '?' + params;
         window.history.pushState('', '', param_url);
 
@@ -374,6 +385,25 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
         query_html += ' | <a href="'+cut2+'">All filters</a>';
     """
 
+    if field in ['abell2744']:
+        FOOTER += f"""
+            var cut2 = 'https://grizli-cutout.herokuapp.com/thumb?all_filters=True&size=4&scl=1.0&asinh=False&filters=f140m-clear,f182m-clear,f210m-clear&rgb_scl=1,1.01,1.01&pl=2';
+            cut2 += '&ra=' + rd[0].toFixed(7);
+            cut2 += '&dec=' + rd[1].toFixed(7);
+            query_html += ' | <a href="'+cut2+'">MB-1um</a>';
+
+            cut2 = 'https://grizli-cutout.herokuapp.com/thumb?all_filters=True&size=4&scl=1.0&asinh=False&filters=f300m-clear,f335m-clear,f360m-clear&rgb_scl=1.15,1.1,0.92&pl=2';
+            cut2 += '&ra=' + rd[0].toFixed(7);
+            cut2 += '&dec=' + rd[1].toFixed(7);
+            query_html += ' | <a href="'+cut2+'">MB-3um</a>';
+
+            var cut2 = 'https://grizli-cutout.herokuapp.com/thumb?all_filters=True&size=4&scl=1.0&asinh=False&filters=f410m-clear,f430m-clear,f460m-clear&rgb_scl=1,1.01,1.01&pl=2';
+            cut2 += '&ra=' + rd[0].toFixed(7);
+            cut2 += '&dec=' + rd[1].toFixed(7);
+            query_html += ' | <a href="'+cut2+'">MB-4um</a>';
+
+        """
+        
     if field in ['uds']:
         FOOTER += """
         var miricut = 'https://grizli-cutout.herokuapp.com/thumb?all_filters=True&size=4&scl=1&asinh=True&filters=f150w-clear,f444w-clear,f770w&rgb_scl=0.8,1.2,1.0&pl=2.0';
@@ -390,6 +420,10 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
         """
         
     FOOTER += """
+        var href = 'https://grizli-cutout.herokuapp.com/exposures?instruments=NIRCAM,MIRI&output=table';
+        href += '&coords=' + rd[0].toFixed(7) + ',' + rd[1].toFixed(7);
+        query_html += ' | <a href="' + href + '">Exposures</a>';
+
         $('#query').html(query_html);
     }
     
@@ -434,8 +468,12 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
             if 'GR150' in f.upper():
                 continue
 
+            if 'GRISM' in f.upper():
+                continue
+                
             if 'CLEARP-' in f.upper():
-                f = f.upper().replace('CLEARP-','CLEARP_')
+                #f = f.upper().replace('CLEARP-','CLEARP_')
+                continue
                 
             if 'clear' in f.lower():
                 nrc_filters.append(f)
@@ -451,6 +489,9 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
         # field_filters = un.values + ['swrgb','lwrgb','ncrgb']
         field_filters = opt_filters + wfc3_filters + nrc_filters + miri_filters + ['swrgb','lwrgb','ncrgb']
 
+        if field == 'abell2744':
+            field_filters += ['mb1um','mb3um','mb4um']
+            
         for f in field_filters:
             fi = f.lower()
             line = f"""var {f_low}_080_{fi.split('-clear')[0]} =  L.tileLayer("{f_low}_080_{fi}"""
@@ -489,7 +530,9 @@ def get_tile_wcs(field, ref='09.09'):
         ref = '16.16'
     elif field.startswith('egs'):
         ref = '10.14'
-    
+    elif field in ('j013804m2156'):
+        ref = '09.09'
+        
     print(f'WCS reference tile {ref} for field {field}')
     
     ref_tile = db.SQL(f"""select * from combined_tiles where field = '{field}' AND tile = '{ref}'""")
@@ -599,7 +642,7 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
     print(f'# {field}')
 
     for vname in viz_catalogs:
-        if (field == 'gds') & ('DESI' in vname):
+        if (field in ('gds','egs-v2','gdn','cos','uds')) & ('DESI' in vname):
             continue
             
         if (vname == 'DESI-S (Duncan+22)') & ('DESI-N (Duncan+22)' in has_catalog):
@@ -676,13 +719,46 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
         elif 'KMOS3D' in vname:
             vcat['comment'] = ['KMOS3D {ID}  z={z:.4f}'.format(**row)
                                for row in vcat]
+        elif 'Luo+17' in vname:
+            vcat['comment'] = ['CDFS 7Ms {Seq}  z={zF:.4f} ({r_zF})'.format(**row)
+                               for row in vcat]
+        elif 'Cooper+12' in vname:
+            vcat['comment'] = ['ACES {Seq}  z={z:.4f} (Q={Q})'.format(**row)
+                               for row in vcat]
+        elif 'Hodge+13' in vname:
+            vcat['comment'] = ['ALESS {ALESS} {Sbest:.2f} mJy'.format(**row)
+                               for row in vcat]
+        elif 'Danielson+17' in vname:
+            vcat['comment'] = ['SMG z={zspec:.4f} (Q={q_zspec})'.format(**row)
+                               for row in vcat]
+        elif 'Tadaki+20' in vname:
+            vcat['comment'] = ['Tadaki {ID} z={z:.3f} ({f_z})'.format(**row)
+                               for row in vcat]
+        elif 'Geach+17' in vname:
+            vcat['S850'] *= 1.e-6 # units seem to be wrong in query result
+            vcat['e_S850'] *= 1.e-6
             
+            vcat['comment'] = ['S2CLS {SName} S850 = {S850:.2f} &pm; {e_S850:.2f} mJy-beam'.format(**row)
+                               for row in vcat]
+            vcat['ePos'] = 2. # made up arcsec, FWHM=14.6
+            
+        elif 'Matthews+13' in vname:
+            vcat['comment'] = ['DEEP2 {ObjNo} z = {z:.4f} (q_z={q_z} class={Cl})'.format(**row)
+                               for row in vcat]
+        elif 'Nandra+15' in vname:
+            vcat['comment'] = ['AEGISX {AEGISXD} {Fcts:.2f} cts'.format(**row)
+                               for row in vcat]
+        elif 'Pharo+22' in vname:
+            vcat['comment'] = ['Pharo+22 DEIMOS {ID} z = {zH7:.4f} q_z={q_zH7}'.format(**row)
+                               for row in vcat]
         else:
             vcat['comment'] = vname
         
         sizes = None
-        if ('XMM' in vname) | ('X-UDS' in vname):
-            for c in ['ePos','srcML']:
+        _test = ('XMM' in vname) | ('X-UDS' in vname) | ('Luo+17' in vname) | ('Hodge+13' in vname) | ('Nandra+15' in vname)
+        _test |= ('Geach+17' in vname)
+        if _test:
+            for c in ['e_RAJ2000', 'errPos', 'ePos','srcML']:
                 if c in vcat.colnames:
                     sizes = vcat[c]
                     print(f'       - Use {c} for source sizes')
@@ -1179,4 +1255,3 @@ def nirspec_slits_layer(field, upload=True):
     
     if upload:
         os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
-            
