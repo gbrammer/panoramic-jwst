@@ -25,6 +25,7 @@ VIZ_CATALOGS = {'DESI-N (Duncan+22)':('VII/292/north','olive'),
                 'DEEP2 (Matthews+13)': ('III/268/deep2all', 'olive'),
                 'AEGIS-X (Nandra+15)': ('J/ApJS/220/10/aegisxd', 'pink'),
                 'DEIMOS (Pharo+22)': ('J/ApJS/261/12/catalog', 'olive'),
+                'CDFN (Alexander+03)': ('J/AJ/126/539/cdfn','pink'),
                 #'Chandra (Evans+2019)': ('IX/57/csc2master', 'pink'), # Doesn't work?
                }
 
@@ -59,6 +60,8 @@ def run_make_fitsmap_html(field, viz_catalogs=VIZ_CATALOGS, catalog_radius=10, o
 
     eso_query_layer(field)
     
+    jwst_sources_layer(field)
+
     mosfire_slits_layer(field)
     
     nirspec_slits_layer(field)
@@ -88,6 +91,7 @@ def make_html_file(field, crval1, crval2, f_tiles, output_html='index.html'):
 <script src='{field}_tiles.js'> </script>
 <script src='{field}_vizier.js'> </script>
 <script src='{field}_eso.js'> </script>
+<script src='{field}_literature.js'> </script>
 <script src='{field}_mosfire.js'> </script>
 <script src='{field}_nirspec.js'> </script>
 """
@@ -757,8 +761,10 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
         sizes = None
         _test = ('XMM' in vname) | ('X-UDS' in vname) | ('Luo+17' in vname) | ('Hodge+13' in vname) | ('Nandra+15' in vname)
         _test |= ('Geach+17' in vname)
+        _test |= ('Alexander+03' in vname)
+        
         if _test:
-            for c in ['e_RAJ2000', 'errPos', 'ePos','srcML']:
+            for c in ['e_RAJ2000', 'errPos', 'ePos','srcML', 'PosErr']:
                 if c in vcat.colnames:
                     sizes = vcat[c]
                     print(f'       - Use {c} for source sizes')
@@ -797,7 +803,7 @@ def make_vizier_overlay(field, viz_catalogs=VIZ_CATALOGS, ref_tile='09.09', radi
                 # olay.append(f'[{xyls}]')
 
                 if sizes is None:
-                    marker = f"""L.circleMarker([{ypi[0]:.1f},{xpi[0]:.1f}], {{radius:8,color:'{col}',weight:2,opacity:0.8,fill:false}}).bindTooltip('{comment}', {{direction:'auto'}})"""
+                    marker = f"""L.circleMarker([{ypi[0]:.1f},{xpi[0]:.1f}], {{radius:14,color:'{col}',weight:2,opacity:0.8,fill:false}}).bindTooltip('{comment}', {{direction:'auto'}})"""
                 else:
                     marker = f"""L.polygon([ {xyls} ], {{color: '{col}', weight:2, opacity:0.8, fill:false}}).bindTooltip('{comment}', {{ direction: 'auto'}})"""
                 
@@ -886,7 +892,7 @@ def make_desi_edr_layer(field, ref_tile='09.09'):
                 col = 'white'
 
             if sizes is None:
-                marker = f"""L.circleMarker([{ypi[0]:.1f},{xpi[0]:.1f}], {{radius:8,color:'{col}',weight:2,opacity:0.8,fill:false}}).bindTooltip('{comment}', {{direction:'auto'}})"""
+                marker = f"""L.circleMarker([{ypi[0]:.1f},{xpi[0]:.1f}], {{radius:10,color:'{col}',weight:2,opacity:0.8,fill:false}}).bindTooltip('{comment}', {{direction:'auto'}})"""
             else:
                 marker = f"""L.polygon([ {xyls} ], {{color: '{col}', weight:2, opacity:0.8, fill:false}}).bindTooltip('{comment}', {{ direction: 'auto'}})"""
             
@@ -1043,6 +1049,71 @@ def eso_query_layer(field, upload=True):
         os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
 
 
+def jwst_sources_layer(field, upload=True):
+    """
+    query jwst-sources table
+    
+    https://github.com/dawn-cph/jwst-sources
+    
+    """
+    print('jwst-sources.csv')
+    
+    output_file = f'{field}_literature.js'
+
+    ref_tile, wcs = get_tile_wcs(field)
+    
+    src = utils.read_catalog('https://raw.githubusercontent.com/dawn-cph/' + 
+                             'jwst-sources/main/jwst-sources.csv')
+    
+    r0, d0 = wcs.calc_footprint().mean(axis=0)
+    ci = utils.read_catalog(f"""ra, dec
+    {r0}, {d0}""", format='csv')
+    
+    idx, dr = ci.match_to_catalog_sky(src)
+    
+    hasm = dr.value < 50*60
+    if hasm.sum() == 0:
+        return None
+    
+    jn = utils.Unique(src['jname'][hasm], verbose=False)
+    src['zphot'] = src['zphot'].filled(-1)
+    src['zspec'] = src['zspec'].filled(-1)
+    
+    rows = []
+    
+    lstr = '{id} zp={zphot:.3f} zs={zspec:.3f} ({arxiv}, {author})'
+    for v in jn.values:
+        srows = src[hasm][jn[v]]
+        label = f'{v}<br>'
+        label += '<br>'.join([lstr.format(**row) for row in srows])
+        rows.append([np.mean(srows['ra']), np.mean(srows['dec']), label])
+        
+    nre = utils.GTable(names=['ra','dec','tooltip'], rows=rows)
+    nre['x'], nre['y'] = wcs.all_world2pix(nre['ra'], nre['dec'], 0)
+    
+    rows = []
+    rows.append("var lit_tt = {direction:'auto'};")
+    rows.append("var lit_prop = {color:'#00FFFF',radius:12,weight:2,opacity:0.95,fill:false};")
+    
+    rows.append(f'var lit_sources = []; // Literature sources from jwst-sources.csv')
+    for row in nre:
+    
+        marker = f"L.circleMarker([{row['y']:.1f},{row['x']:.1f}], lit_prop)"
+        marker += f".bindTooltip('{row['tooltip']}', lit_tt)"
+        marker += f".bindPopup('{row['tooltip']}')"
+    
+        rows.append(f'lit_sources.push({marker});')
+                
+    rows.append(f"overlays['Literature Sources'] = L.layerGroup(lit_sources);")
+
+    with open(output_file, 'w') as fp:
+        for row in rows:
+            fp.write(row+'\n')
+    
+    if upload:
+        os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+
+
 def mosfire_slits_layer(field, upload=True):
     """
     Query database for MOSFIRE spectra
@@ -1144,6 +1215,8 @@ def nirspec_slits_layer(field, upload=True):
     keys = ['{program} {grating} {filter}'.format(**row).replace(' CLEAR','')
             for row in slits]
     
+    slits['msamet'] = [m.split('_msa.fits')[0] for m in slits['msametfl']]
+
     un = utils.Unique(keys)
     
     rows = []
@@ -1167,7 +1240,8 @@ def nirspec_slits_layer(field, upload=True):
             marker = f'L.polygon([{poly}],{prop})'
             
             if row['is_source']:
-                marker += ".bindTooltip('{program} {grating} {filter} #{source_id}')".format(**row).replace(' CLEAR','')
+                #marker += ".bindTooltip('{program} {grating} {filter} #{source_id}')".format(**row).replace(' CLEAR','')
+                marker += ".bindTooltip('{msamet}<br> {grating} {filter} #{source_id}')".format(**row).replace(' CLEAR','')
                 
             row = f"{kl}.push({marker});"
             #row += f" {{color: '{color}', weight:1, opacity:0.8, fill:false}}));"
@@ -1191,24 +1265,38 @@ def nirspec_slits_layer(field, upload=True):
     # Extractions
     nre = db.SQL(f"""select root, file, ra, dec, grating, filter, SUBSTR(dataset,4,4) as program
     from nirspec_extractions
-    WHERE polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec) and root not like 'uncover-5m%%'
+    WHERE root like '%%v2' AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec) and root not like 'uncover-5m%%'
     
     """)
     
     if len(nre) > 0:
         nre['grade'] = -1
         nre['z'] = -1.
+
+        nrz = db.SQL(f"""select nz.root, nz.file, nz.z as z
+        from nirspec_redshifts nz, nirspec_extractions ne
+        WHERE ne.file = nz.file
+        AND ne.root like '%%v2'
+        AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec) and nz.root not like 'uncover-5m%%'
     
-        nrz = db.SQL(f"""select nz.root, nz.file, nz.z as zauto, nm.z as z, grade
+        """)
+
+        for i, row in enumerate(nrz):
+            for k in ['z']:
+                nre[k][nre['file'] == row['file']] = row[k]
+
+        # With grades
+        nrg = db.SQL(f"""select nz.root, nz.file, nz.z as zauto, nm.z as z, grade
         from nirspec_redshifts nz, nirspec_redshifts_manual nm, nirspec_extractions ne
         WHERE nz.file = nm.file AND ne.file = nz.file
+        AND ne.root like '%%v2'
         AND polygon(circle(point({r0},{d0}),0.6)) @> point(ra, dec) and nz.root not like 'uncover-5m%%'
     
         """)
     
-        for i, row in enumerate(nrz):
+        for i, row in enumerate(nrg):
             for k in ['grade','z']:
-                nre[k][nre['file'] == row['file']] = nrz[k][i]
+                nre[k][nre['file'] == row['file']] = row[k]
             
         if len(nre) > 0:
         
@@ -1226,9 +1314,9 @@ def nirspec_slits_layer(field, upload=True):
             nre['x'], nre['y'] = wcs.all_world2pix(nre['ra'], nre['dec'], 0)
         
             rows.append("var spec_tt = {direction:'auto'};")
-            rows.append("var spec_m3 = {color:'#7AE27A',radius:8,weight:2,opacity:0.95,fill:false};")
-            rows.append("var spec_m2 = {color:'#E2DF7A',radius:8,weight:2,opacity:0.95,fill:false};")
-            rows.append("var spec_m0 = {color:'salmon',radius:8,weight:2,opacity:0.95,fill:false};")
+            rows.append("var spec_m3 = {color:'#7AE27A',radius:6,weight:2,opacity:0.95,fill:false};")
+            rows.append("var spec_m2 = {color:'#E2DF7A',radius:6,weight:2,opacity:0.95,fill:false};")
+            rows.append("var spec_m0 = {color:'salmon',radius:6,weight:2,opacity:0.95,fill:false};")
         
             for j, k in enumerate(un.values):
                 #kl = 'spec_'+k.lower().replace(' ','_')
@@ -1255,3 +1343,4 @@ def nirspec_slits_layer(field, upload=True):
     
     if upload:
         os.system(f'aws s3 cp {output_file} s3://{S3_MAP_PREFIX}/{field}/ --acl public-read')
+            
