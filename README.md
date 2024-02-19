@@ -23,6 +23,7 @@ Notebooks for bookkeeping NIRCam data from the PANORAMIC JWST survey.
     3. Check at *Check for rows that are already in the database...* if there were new associations found.  If so, the message will print "New: **N**" with **N** > 0.  
     4. To send the new associations to the database, flip the "False" to "True" in the first `if/else` clause at *# Send associations to the database table*.
     5. *Flip that clause back to False after running to avoid sending duplicate association definitions.*. It won't be a problem if you "Run All" the notebook again since they'll be identified as already having been sent, but if you run the "send to db" line multiple times consecutively it could create duplicate rows in the association table.
+    6. Do not run the rest of step 1
 2. `Notebooks/step2-make-astrometry-catalog.ipynb`
   - Quicklook processing of a LW filter
   - Generate an astrometric catalog and send to the ``astrometry_reference`` table in the database.
